@@ -12,6 +12,7 @@ const (
 	cmdNameRun      = "run"
 	cmdNameOnce     = "once"
 	cmdNameValidate = "validate"
+	cmdNameTui      = "tui"
 
 	// flag names
 	flagConfig      = "config"
@@ -69,6 +70,8 @@ const (
 	descValidShort = "Validate configuration file"
 	descValidLong  = "Validate the configuration file for syntax and content errors."
 	descConfigFlag = "path to configuration file"
+	descTuiShort   = "Run continuous monitoring in a ( tui )Terminal User Interface"
+	descTuiLong    = "Start SENTINEL in continuous monitoring mode. Checks run every minute."
 
 	// message formats
 	fmtLoadedServices           = "Loaded %d services to monitor\n"
