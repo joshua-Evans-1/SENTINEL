@@ -17,12 +17,18 @@ SENTINEL is a simple monitoring system written in Go. This application can monit
 
 ## Features
 
-- Monitor various web services via HTTP
+- Monitor various web services via HTTP/HTTPS
 - Simple configuration using YAML format
+- Customizable check intervals and timeouts per service
 - UP/DOWN status reporting with response time
-- Automatic checks every minute
+- Automatic checks on configurable intervals
 - Concurrency for efficient checking
 - Flexible CLI with various commands
+- Telegram notifications for service DOWN/RECOVERY alerts
+- Discord webhook notifications with rich embeds
+- Docker support with multi-stage builds (image size < 30MB)
+- Environment variable support for secure credential management
+- Prometheus metrics export for integration with Grafana
 
 ## Installation
 
@@ -72,6 +78,35 @@ go install github.com/0xReLogic/SENTINEL@latest
 ./sentinel run --config /path/to/config.yaml
 ```
 
+## Docker Deployment
+
+### Using Docker Compose (Recommended)
+```bash
+# Copy environment variables
+cp .env.example .env
+# Edit .env with your tokens - get these from mentioned steps 
+
+# Start SENTINEL
+docker compose up -d
+
+# View logs
+docker compose logs -f
+
+# Stop SENTINEL
+docker compose down
+```
+
+### Using Docker Directly
+```bash
+docker build -t sentinel .
+
+# Run container
+docker run --rm --env-file .env -v ./sentinel.yaml:/app/sentinel.yaml -p 8080:8080 sentinel
+```
+
+### Configuration
+Mount your `sentinel.yaml` config file as a volume to customize which services to monitor.
+
 ## Configuration Structure
 
 The `sentinel.yaml` configuration file has the following format:
@@ -81,11 +116,18 @@ The `sentinel.yaml` configuration file has the following format:
 services:
   - name: "Google"
     url: "https://www.google.com"
+    interval: 30s       # optional, default is 1m
+    timeout: 3s         # optional, default is 5s
   - name: "GitHub"
     url: "https://github.com"
+    interval: 2m
   - name: "Example"
     url: "https://example.com"
+    # No interval/timeout defined -> defaults apply
 ```
+
+If `interval` or `timeout` are omitted, SENTINEL falls back to the defaults of `1m`
+and `5s` respectively.
 
 ## Project Structure
 
@@ -94,6 +136,7 @@ SENTINEL/
 ├── checker/       # Package for service checking
 ├── cmd/           # CLI commands
 ├── config/        # Package for configuration management
+├── notifier/      # Notification for Telegram
 ├── main.go        # Main program file
 ├── Makefile       # Makefile for easier build and test
 ├── go.mod         # Go module definition
@@ -104,85 +147,189 @@ SENTINEL/
 └── CONTRIBUTING.md # Contribution guidelines
 ```
 
-## Roadmap
-
-- [x] Phase 1: Core Engine - Basic implementation
-  - [x] 1.1: Create basic service checking functionality
-  - [x] 1.2: Implement configuration loading from YAML
-  - [x] 1.3: Build simple CLI interface
-
-- [x] Phase 2: Making it "Smart" - Better concurrency and CLI
-  - [x] 2.1: Add concurrent service checking
-  - [x] 2.2: Implement more robust CLI with subcommands
-  - [x] 2.3: Add proper error handling and logging
-
-- [x] Phase 3: Advanced Features - Notifications and advanced check types
-  - [x] 3.1: Add notification system (email, webhook)
-  - [x] 3.2: Implement advanced check types (TCP, ICMP)
-  - [x] 3.3: Add custom thresholds and alerting rules
-
-- [x] Phase 4: Open Source Readiness - Documentation and testing
-  - [x] 4.1: Complete code documentation and examples
-  - [x] 4.2: Add comprehensive test suite with high coverage
-  - [x] 4.3: Create contribution guidelines and code of conduct
-  - [x] 4.4: Add CI/CD pipeline with GitHub Actions
-
-- [ ] Phase 5: Enterprise Features - Advanced monitoring capabilities
-  - [ ] 5.1: Implement distributed monitoring with agent architecture
-  - [ ] 5.2: Add support for custom plugins and extensions
-  - [ ] 5.3: Create dashboard for real-time monitoring visualization
-  - [ ] 5.4: Implement historical data storage and analysis
-
-- [ ] Phase 6: Integration and Ecosystem - Connect with other tools
-  - [ ] 6.1: Add integration with popular alerting systems (PagerDuty, OpsGenie)
-  - [ ] 6.2: Implement support for metrics export to Prometheus/Grafana
-  - [ ] 6.3: Create API for third-party integrations
-  - [ ] 6.4: Develop SDKs for popular programming languages
-
-- [ ] Phase 7: Scalability and Performance - Enterprise-grade monitoring
-  - [ ] 7.1: Optimize for high-volume monitoring environments
-  - [ ] 7.2: Implement clustering for horizontal scaling
-  - [ ] 7.3: Add support for multi-region monitoring
-  - [ ] 7.4: Create enterprise deployment guides and best practices
-
 ## Contribution
 
 Contributions are greatly appreciated! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on the pull request submission process.
 
-## Releasing New Versions
+## Notifications
 
-To release a new version:
+SENTINEL can send real-time alerts when a service goes down or recovers.
 
-1. Create a new tag with semantic versioning:
-```bash
-git tag -a v1.0.0 -m "Release v1.0.0"
-git push origin v1.0.0
+### Telegram Setup
+
+To receive notifications in a Telegram chat, follow these steps:
+
+**Step 1: Get Telegram Credentials**
+
+1.  **Bot Token**:
+    * Open Telegram and start a chat with the official **`@BotFather`**.
+    * Send the `/newbot` command and follow the prompts to create your bot.
+    * `@BotFather` will give you a unique **Bot Token**. This is a secret, so don't share it publicly.
+
+2.  **Chat ID**:
+    * Start a chat with your newly created bot by finding it and sending the `/start` command. **This is a required step.**
+    * Next, start a chat with the bot **`@userinfobot`**.
+    * Send it a message, and it will reply with your user information, including your **Chat ID**.
+
+**Step 2: Configure SENTINEL**
+
+1.  **Create a `.env` file** in the root directory of the project. This file will securely store your secrets. **Important**: Add `.env` to your `.gitignore` file to avoid committing secrets to your repository.
+
+    ```
+    # .env
+    # Variables for Telegram notifications
+    TELEGRAM_BOT_TOKEN="123456:ABC-DEF1234ghIkl-JAS0987-aB5-qwer"
+    TELEGRAM_CHAT_ID="123456789"
+    ```
+
+2.  **Update your `sentinel.yaml`** to enable and configure Telegram notifications. The `${VAR_NAME}` syntax will securely load the values from your `.env` file.
+
+    ```yaml
+    # sentinel.yaml
+    
+    notifications:
+      telegram:
+        enabled: true
+        bot_token: "${TELEGRAM_BOT_TOKEN}"
+        chat_id: "${TELEGRAM_CHAT_ID}"
+        notify_on:
+          - down
+          - recovery
+    ```
+
+#### Example Notification Messages
+
+When a service status changes, you will receive a message in your configured chat.
+
+**Service Down**
+> 🔴 **Service DOWN**
+> **Name:** My Failing API
+> **URL:** https://api.example.com/health
+> **Error:** connection timeout
+> **Time:** 2025-10-12 10:10:00
+
+**Service Recovered**
+> 🟢 **Service RECOVERED**
+> **Name:** My Failing API
+> **URL:** https://api.example.com/health
+> **Downtime:** 5m 30s
+> **Time:** 2025-10-12 10:15:30
+
+### Discord Setup
+
+To receive notifications in a Discord channel via webhook:
+
+**Step 1: Get Discord Webhook URL**
+
+1. Open your Discord server and go to **Server Settings** → **Integrations** → **Webhooks**
+2. Click **"New Webhook"** or **"Create Webhook"**
+3. Give your webhook a name (e.g., "SENTINEL Monitor")
+4. Select the channel where you want to receive notifications
+5. Click **"Copy Webhook URL"** - this is your webhook URL
+
+**Step 2: Configure SENTINEL**
+
+1. **Add to your `.env` file**:
+
+    ```
+    # .env
+    # Variables for Discord notifications
+    DISCORD_WEBHOOK_URL="https://discord.com/api/webhooks/123456789/abcdefghijklmnop"
+    ```
+
+2. **Update your `sentinel.yaml`**:
+
+    ```yaml
+    # sentinel.yaml
+    
+    notifications:
+      telegram:
+        enabled: false  # Can enable both at the same time
+        bot_token: "${TELEGRAM_BOT_TOKEN}"
+        chat_id: "${TELEGRAM_CHAT_ID}"
+        notify_on:
+          - down
+          - recovery
+      discord:
+        enabled: true
+        webhook_url: "${DISCORD_WEBHOOK_URL}"
+        notify_on:
+          - down
+          - recovery
+    ```
+
+#### Example Discord Notification Messages
+
+Discord notifications use rich embeds with color coding:
+
+**Service Down** (Red embed)
+- **Title:** 🔴 Service DOWN
+- **Fields:**
+  - Service: My Failing API
+  - URL: https://api.example.com/health
+  - Error: connection timeout
+- **Timestamp:** 2025-10-12T10:10:00Z
+
+**Service Recovered** (Green embed)
+- **Title:** 🟢 Service RECOVERED
+- **Fields:**
+  - Service: My Failing API
+  - URL: https://api.example.com/health
+  - Downtime: 5m 30s
+- **Timestamp:** 2025-10-12T10:15:30Z
+
+**Note:** You can enable both Telegram and Discord notifications simultaneously. SENTINEL will send alerts to all enabled notification channels.
+
+## Prometheus Metrics
+
+SENTINEL can expose metrics in Prometheus format for integration with monitoring stacks like Grafana.
+
+### Configuration
+
+Add the following to your `sentinel.yaml`:
+
+```yaml
+metrics:
+  enabled: true
+  port: 9090
+  path: "/metrics"
 ```
 
-2. The GitHub Actions workflow will automatically:
-   - Build binaries for multiple platforms (Linux, Windows, macOS)
-   - Create a GitHub release with the binaries attached
-   - Generate release notes based on commit messages
+### Available Metrics
 
-Binary releases will be available at: https://github.com/0xReLogic/SENTINEL/releases
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `sentinel_service_up` | Gauge | service, url | Service is up (1) or down (0) |
+| `sentinel_response_time_seconds` | Histogram | service, url | HTTP response time in seconds |
+| `sentinel_checks_total` | Counter | service, status | Total number of checks performed |
+| `sentinel_http_status_total` | Counter | service, code | HTTP status codes received |
 
-## Local Release
+### Prometheus Scrape Config
 
-You can create a local release using the provided scripts:
+Add this to your `prometheus.yml`:
 
-### Windows
-```bash
-# Run the build-release.bat script
-.\build-release.bat
+```yaml
+scrape_configs:
+  - job_name: 'sentinel'
+    scrape_interval: 30s
+    static_configs:
+      - targets: ['localhost:9090']
 ```
 
-### Linux/macOS
-```bash
-# Give execute permission
-chmod +x build-release.sh
+### Example Queries
 
-# Run the script
-./build-release.sh
+```promql
+# Service uptime
+sentinel_service_up{service="Google"}
+
+# Average response time (last 5 minutes)
+rate(sentinel_response_time_seconds_sum[5m]) / rate(sentinel_response_time_seconds_count[5m])
+
+# Success rate
+rate(sentinel_checks_total{status="success"}[5m]) / rate(sentinel_checks_total[5m])
+
+# Error rate alert
+rate(sentinel_checks_total{status="failure"}[5m]) > 0.1
 ```
 
 The script will automatically build binaries for all platforms (Linux, Windows, macOS) and place them in the `./dist` folder.
@@ -190,7 +337,15 @@ The script will automatically build binaries for all platforms (Linux, Windows, 
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
+## Contributors
+
+Thanks to all the amazing people who have contributed to SENTINEL. 🎉
+
+<a href="https://github.com/0xReLogic/SENTINEL/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=0xReLogic/SENTINEL" />
+</a>
+
+
 ## Acknowledgments
 
-- Thanks to all contributors who have helped with this project
 - Inspiration from various monitoring systems such as Prometheus, Nagios, and Uptime Robot
