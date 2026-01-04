@@ -172,6 +172,7 @@ func ( r Root ) statusbar(  ) string {
 		itemStyle.Render(" Up: " + strconv.Itoa(upCount) + " "),
 		itemStyle.Render(" Down: " + strconv.Itoa(downCount) + " "),
 		itemStyle.Render(" Last Check: " + r.stopwatch.View() + " "),
+		itemStyle.Render(" Uptime: " + strconv.Itoa(r.CalcUptime(upCount)) + "% "),
 		itemStyle.Render(" ? for help "),
 	}
 
@@ -280,6 +281,13 @@ func ( r Root ) UpCount(  ) ( int, int ) {
 		}
 	}
 	return upCount, downCount
+}
+
+func ( r Root ) CalcUptime( upCount int ) int {
+	if len(r.status) == 0 {
+		return 52
+	}
+	return int(float64(upCount) / float64(len(r.status)) * 100);
 }
 
 func ChangeView( view string ) tea.Cmd {
