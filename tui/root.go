@@ -265,7 +265,7 @@ func ( r Root ) CheckServices() tea.Cmd {
 
 func ( r Root ) CheckService( service config.Service ) tea.Cmd {
 	return func() tea.Msg {
-		status := checker.CheckService( service.Name, service.URL )
+		status := checker.CheckService( service.Name, service.URL, service.Timeout )
 		return StatusMsg{ status: status }
 	}
 }
